@@ -1184,6 +1184,38 @@ public final class Settings {
     public final Setting<Boolean> disconnectOnArrival = new Setting<>(false);
 
     /**
+     * Legit movement mode: Forces the bot to move like a legitimate human player.
+     * Looks in the direction of movement, avoids snapping, avoids breaking through walls, and synchronizes anti-cheat safe behavior.
+     */
+    public final Setting<Boolean> legitMovement = new Setting<>(false);
+
+    /**
+     * Legit camera movement mode: Hijacks the camera so that all rotations
+     * made by Baritone (pathing, breaking, placing, mining, looking) smoothly glide
+     * using human-like ease-out curves and mouse-quantized steps instead of instantaneously snapping.
+     */
+    public final Setting<Boolean> legitCameraMovement = new Setting<>(true);
+
+    /**
+     * Maximum rotation speed for legit camera movement in degrees per tick.
+     * Default: 45.0 degrees per tick (crisp, snappy, yet smooth and natural).
+     */
+    public final Setting<Float> legitCameraSpeed = new Setting<>(45.0f);
+
+    /**
+     * Smoothing factor for legit camera movement ease-out deceleration curve.
+     * Controls how smoothly the camera eases into the target angle.
+     * Default: 0.65f.
+     */
+    public final Setting<Float> legitCameraSmoothing = new Setting<>(0.65f);
+
+    /**
+     * When enabled, slows down sprint during sharp corner turns until the camera
+     * has substantially aligned with the path, ensuring 100% path accuracy.
+     */
+    public final Setting<Boolean> legitCameraTurnAssist = new Setting<>(true);
+
+    /**
      * Disallow MineBehavior from using X-Ray to see where the ores are. Turn this option on to force it to mine "legit"
      * where it will only mine an ore once it can actually see it, so it won't do or know anything that a normal player
      * couldn't. If you don't want it to look like you're X-Raying, turn this on

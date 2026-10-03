@@ -253,9 +253,20 @@ public class SettingsUtil {
             public Object parse(Type type, String raw) {
                 Type elementType = ((ParameterizedType) type).getActualTypeArguments()[0];
                 Parser parser = Parser.getParser(elementType);
-                return Stream.of(raw.split(","))
-                        .map(s -> parser.parse(elementType, s))
-                        .collect(Collectors.toList());
+                List<Object> result = new ArrayList<>();
+                for (String s : raw.split(",")) {
+                    s = s.trim();
+                    if (s.isEmpty()) continue;
+                    try {
+                        Object parsed = parser.parse(elementType, s);
+                        if (parsed != null) {
+                            result.add(parsed);
+                        }
+                    } catch (Exception e) {
+                        Helper.HELPER.logDirect("Ignoring unrecognized element in setting list: " + s);
+                    }
+                }
+                return result;
             }
 
             @Override

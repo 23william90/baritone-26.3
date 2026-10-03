@@ -57,7 +57,11 @@ public class BlockUtils {
         if (resourceCache.containsKey(name)) {
             return null; // cached as null
         }
-        block = BuiltInRegistries.BLOCK.getOptional(Identifier.tryParse(name.contains(":") ? name : "minecraft:" + name)).orElse(null);
+        String lookupName = name;
+        if ("grass".equals(name) || "minecraft:grass".equals(name)) {
+            lookupName = "minecraft:short_grass";
+        }
+        block = BuiltInRegistries.BLOCK.getOptional(Identifier.tryParse(lookupName.contains(":") ? lookupName : "minecraft:" + lookupName)).orElse(null);
         Map<String, Block> copy = new HashMap<>(resourceCache); // read only copy is safe, wont throw concurrentmodification
         copy.put(name, block);
         resourceCache = copy;

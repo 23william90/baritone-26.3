@@ -40,6 +40,11 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     private Target target;
 
     /**
+     * Persistent target for legit camera smoothing across ticks until reached.
+     */
+    private Target persistentLegitTarget;
+
+    /**
      * The rotation known to the server. Returned by {@link #getEffectiveRotation()} for use in {@link IPlayerContext}.
      */
     private Rotation serverRotation;
@@ -66,6 +71,9 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     @Override
     public void updateTarget(Rotation rotation, boolean blockInteract) {
         this.target = new Target(rotation, Target.Mode.resolve(ctx, blockInteract));
+        if (Baritone.settings().legitCameraMovement.value) {
+            this.persistentLegitTarget = this.target;
+        }
     }
 
     @Override
@@ -82,6 +90,10 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (Baritone.settings().legitCameraMovement.value) {
+            handleLegitPlayerUpdate(event);
+            return;
+        }
 
         if (this.target == null) {
             return;
@@ -133,6 +145,80 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
         }
     }
 
+    private void handleLegitPlayerUpdate(PlayerUpdateEvent event) {
+        if (ctx.player() == null) {
+            return;
+        }
+
+        switch (event.getState()) {
+            case PRE: {
+                Target activeTarget = this.target != null ? this.target : this.persistentLegitTarget;
+                if (activeTarget == null || activeTarget.mode == Target.Mode.NONE) {
+                    return;
+                }
+
+                if (activeTarget.mode == Target.Mode.SERVER) {
+                    this.prevRotation = new Rotation(ctx.player().getYRot(), ctx.player().getXRot());
+                    final Rotation actual = this.processor.peekRotation(activeTarget.rotation);
+                    ctx.player().setYRot(actual.getYaw());
+                    ctx.player().setXRot(actual.getPitch());
+                    return;
+                }
+
+                // Smooth human-like camera rotation
+                float currentYaw = ctx.player().getYRot();
+                float currentPitch = ctx.player().getXRot();
+
+                final Rotation actual = this.processor.peekRotation(activeTarget.rotation);
+                float targetYaw = actual.getYaw();
+                float targetPitch = actual.getPitch();
+
+                float deltaYaw = Rotation.normalizeYaw(targetYaw - currentYaw);
+                float deltaPitch = targetPitch - currentPitch;
+                float totalDistance = (float) Math.hypot(deltaYaw, deltaPitch);
+
+                if (totalDistance < 0.25f) {
+                    ctx.player().setYRot(targetYaw);
+                    ctx.player().setXRot(targetPitch);
+                    if (this.target == null) {
+                        this.persistentLegitTarget = null;
+                    }
+                    return;
+                }
+
+                // Dynamic speed with ease-out curve
+                float maxSpeed = Baritone.settings().legitCameraSpeed.value;
+                float smoothing = Baritone.settings().legitCameraSmoothing.value;
+                float dynamicSpeed = Math.min(maxSpeed, Math.max(2.5f, totalDistance * smoothing));
+
+                float ratio = Math.min(1.0f, dynamicSpeed / totalDistance);
+                float stepYaw = deltaYaw * ratio;
+                float stepPitch = deltaPitch * ratio;
+
+                float nextYaw = this.processor.calculateMouseMove(currentYaw, currentYaw + stepYaw);
+                float nextPitch = this.processor.calculateMouseMove(currentPitch, currentPitch + stepPitch);
+
+                nextPitch = Rotation.clampPitch(nextPitch);
+                nextYaw = Rotation.normalizeYaw(nextYaw);
+
+                ctx.player().setYRot(nextYaw);
+                ctx.player().setXRot(nextPitch);
+                break;
+            }
+            case POST: {
+                if (this.prevRotation != null) {
+                    ctx.player().setYRot(this.prevRotation.getYaw());
+                    ctx.player().setXRot(this.prevRotation.getPitch());
+                    this.prevRotation = null;
+                }
+                this.target = null;
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
     @Override
     public void onSendPacket(PacketEvent event) {
         if (!(event.getPacket() instanceof ServerboundMovePlayerPacket)) {
@@ -149,11 +235,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
     public void onWorldEvent(WorldEvent event) {
         this.serverRotation = null;
         this.target = null;
+        this.persistentLegitTarget = null;
     }
 
     public void pig() {
-        if (this.target != null) {
-            final Rotation actual = this.processor.peekRotation(this.target.rotation);
+        Target activeTarget = Baritone.settings().legitCameraMovement.value && this.persistentLegitTarget != null ? this.persistentLegitTarget : this.target;
+        if (activeTarget != null) {
+            final Rotation actual = this.processor.peekRotation(activeTarget.rotation);
             ctx.player().setYRot(actual.getYaw());
         }
     }
@@ -168,11 +256,28 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
 
     @Override
     public void onPlayerRotationMove(RotationMoveEvent event) {
+        if (Baritone.settings().legitCameraMovement.value) {
+            if (ctx.player() != null) {
+                event.setYaw(ctx.player().getYRot());
+                event.setPitch(ctx.player().getXRot());
+            }
+            return;
+        }
+
         if (this.target != null) {
             final Rotation actual = this.processor.peekRotation(this.target.rotation);
             event.setYaw(actual.getYaw());
             event.setPitch(actual.getPitch());
         }
+    }
+
+    public boolean isCameraTurningSharply() {
+        Target activeTarget = this.target != null ? this.target : this.persistentLegitTarget;
+        if (activeTarget == null || ctx.player() == null) {
+            return false;
+        }
+        float deltaYaw = Rotation.normalizeYaw(activeTarget.rotation.getYaw() - ctx.player().getYRot());
+        return Math.abs(deltaYaw) > 50.0f;
     }
 
     private static final class AimProcessor extends AbstractAimProcessor {
@@ -289,10 +394,13 @@ public final class LookBehavior extends Behavior implements ILookBehavior {
             return pitch;
         }
 
-        private float calculateMouseMove(float current, float target) {
+        public float calculateMouseMove(float current, float target) {
+            if (ctx.minecraft() == null || ctx.minecraft().options == null) {
+                return target;
+            }
             final float delta = target - current;
             final double deltaPx = angleToMouse(delta); // yes, even the mouse movements use double
-            return current + mouseToAngle(deltaPx);
+            return current + (float) mouseToAngle(deltaPx);
         }
 
         private double angleToMouse(float angleDelta) {

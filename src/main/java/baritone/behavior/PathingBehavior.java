@@ -112,7 +112,13 @@ public final class PathingBehavior extends Behavior implements IPathingBehavior,
     @Override
     public void onPlayerSprintState(SprintStateEvent event) {
         if (isPathing()) {
-            event.setState(current.isSprinting());
+            boolean sprint = current.isSprinting();
+            if (sprint && Baritone.settings().legitCameraMovement.value && Baritone.settings().legitCameraTurnAssist.value) {
+                if (baritone.getLookBehavior() instanceof LookBehavior && ((LookBehavior) baritone.getLookBehavior()).isCameraTurningSharply()) {
+                    sprint = false;
+                }
+            }
+            event.setState(sprint);
         }
     }
 

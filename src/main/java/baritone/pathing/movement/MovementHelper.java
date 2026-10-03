@@ -143,6 +143,11 @@ public interface MovementHelper extends ActionCosts, Helper {
         if (block instanceof AirBlock) {
             return YES;
         }
+        if (block instanceof BushBlock || block instanceof DoublePlantBlock || block instanceof FlowerBlock
+                || block == Blocks.SHORT_GRASS || block == Blocks.TALL_GRASS || block == Blocks.FERN || block == Blocks.LARGE_FERN
+                || block == Blocks.DEAD_BUSH) {
+            return YES;
+        }
         if (block instanceof BaseFireBlock || block == Blocks.COBWEB || block == Blocks.END_PORTAL || block == Blocks.COCOA || block instanceof AbstractSkullBlock || block == Blocks.BUBBLE_COLUMN || block instanceof ShulkerBoxBlock || block instanceof SlabBlock || block instanceof TrapDoorBlock || block == Blocks.HONEY_BLOCK || block == Blocks.END_ROD || block == Blocks.SWEET_BERRY_BUSH || block == Blocks.POINTED_DRIPSTONE || block instanceof AmethystClusterBlock || block instanceof AzaleaBlock) {
             return NO;
         }
@@ -233,6 +238,11 @@ public interface MovementHelper extends ActionCosts, Helper {
     static Ternary fullyPassableBlockState(BlockState state) {
         Block block = state.getBlock();
         if (block instanceof AirBlock) { // early return for most common case
+            return YES;
+        }
+        if (block instanceof BushBlock || block instanceof DoublePlantBlock || block instanceof FlowerBlock
+                || block == Blocks.SHORT_GRASS || block == Blocks.TALL_GRASS || block == Blocks.FERN || block == Blocks.LARGE_FERN
+                || block == Blocks.DEAD_BUSH) {
             return YES;
         }
         // exceptions - blocks that are isPassable true, but we can't actually jump through
